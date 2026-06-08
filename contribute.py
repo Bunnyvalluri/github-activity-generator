@@ -27,9 +27,16 @@ def main(def_args=sys.argv[1:]):
     days_after = args.days_after
     if days_after < 0:
         sys.exit('days_after must not be negative')
-    os.mkdir(directory)
+    
+    if not os.path.exists(directory):
+        os.mkdir(directory)
     os.chdir(directory)
-    run(['git', 'init', '-b', 'main'])
+    
+    # Try git init -b main, fallback to git init & checkout if needed
+    init_status = run(['git', 'init', '-b', 'main'], check=False)
+    if init_status != 0:
+        run(['git', 'init'])
+        run(['git', 'checkout', '-b', 'main'])
 
     if user_name is not None:
         run(['git', 'config', 'user.name', user_name])
@@ -37,19 +44,28 @@ def main(def_args=sys.argv[1:]):
     if user_email is not None:
         run(['git', 'config', 'user.email', user_email])
 
-    start_date = curr_date.replace(hour=20, minute=0) - timedelta(days_before)
+    # Initialize README.md so it is tracked from the start
+    with open('README.md', 'w') as file:
+        file.write('# GitHub Activity Generator\n\n')
+    run(['git', 'add', 'README.md'])
+    run(['git', 'commit', '-m', 'Initial commit'])
+
+    start_date = curr_date - timedelta(days_before)
     for day in (start_date + timedelta(n) for n
                 in range(days_before + days_after)):
         if (not no_weekends or day.weekday() < 5) \
                 and randint(0, 100) < frequency:
-            for commit_time in (day + timedelta(minutes=m)
-                                for m in range(contributions_per_day(args))):
+            commits_count = contributions_per_day(args)
+            # Generate sorted random times between 9 AM (540 minutes) and 9 PM (1260 minutes)
+            commit_minutes = sorted(randint(540, 1260) for _ in range(commits_count))
+            for minutes in commit_minutes:
+                commit_time = day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=minutes, seconds=randint(0, 59))
                 contribute(commit_time)
 
     if repository is not None:
         run(['git', 'remote', 'add', 'origin', repository])
         run(['git', 'branch', '-M', 'main'])
-        run(['git', 'push', '-u', 'origin', 'main'])
+        run(['git', 'push', '-f', '-u', 'origin', 'main'])
 
     print('\nRepository generation ' +
           '\x1b[6;30;42mcompleted successfully\x1b[0m!')
@@ -58,13 +74,19 @@ def main(def_args=sys.argv[1:]):
 def contribute(date):
     with open(os.path.join(os.getcwd(), 'README.md'), 'a') as file:
         file.write(message(date) + '\n\n')
-    run(['git', 'add', '.'])
-    run(['git', 'commit', '-m', '"%s"' % message(date),
-         '--date', date.strftime('"%Y-%m-%d %H:%M:%S"')])
+    run(['git', 'commit', '-a', '-m', message(date),
+         '--date', date.strftime('%Y-%m-%d %H:%M:%S')])
 
 
-def run(commands):
-    Popen(commands).wait()
+def run(commands, check=True):
+    try:
+        process = Popen(commands)
+        exit_code = process.wait()
+        if check and exit_code != 0:
+            sys.exit(f"Error: Command {' '.join(commands)} failed with exit code {exit_code}")
+        return exit_code
+    except FileNotFoundError:
+        sys.exit("Error: 'git' command not found. Please install Git and make sure it is in your PATH.")
 
 
 def message(date):
