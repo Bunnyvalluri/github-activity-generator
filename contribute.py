@@ -27,11 +27,10 @@ def main(def_args=sys.argv[1:]):
     days_after = args.days_after
     if days_after < 0:
         sys.exit('days_after must not be negative')
-    
+
     if not os.path.exists(directory):
         os.mkdir(directory)
     os.chdir(directory)
-    
     # Try git init -b main, fallback to git init & checkout if needed
     init_status = run(['git', 'init', '-b', 'main'], check=False)
     if init_status != 0:
@@ -56,10 +55,18 @@ def main(def_args=sys.argv[1:]):
         if (not no_weekends or day.weekday() < 5) \
                 and randint(0, 100) < frequency:
             commits_count = contributions_per_day(args)
-            # Generate sorted random times between 9 AM (540 minutes) and 9 PM (1260 minutes)
-            commit_minutes = sorted(randint(540, 1260) for _ in range(commits_count))
+            # Generate sorted random times between 9 AM (540 minutes)
+            # and 9 PM (1260 minutes)
+            commit_minutes = sorted(
+                randint(540, 1260) for _ in range(commits_count)
+            )
             for minutes in commit_minutes:
-                commit_time = day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=minutes, seconds=randint(0, 59))
+                base_day = day.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                commit_time = base_day + timedelta(
+                    minutes=minutes, seconds=randint(0, 59)
+                )
                 contribute(commit_time)
 
     if repository is not None:
@@ -83,10 +90,16 @@ def run(commands, check=True):
         process = Popen(commands)
         exit_code = process.wait()
         if check and exit_code != 0:
-            sys.exit(f"Error: Command {' '.join(commands)} failed with exit code {exit_code}")
+            sys.exit(
+                f"Error: Command {' '.join(commands)} "
+                f"failed with exit code {exit_code}"
+            )
         return exit_code
     except FileNotFoundError:
-        sys.exit("Error: 'git' command not found. Please install Git and make sure it is in your PATH.")
+        sys.exit(
+            "Error: 'git' command not found. "
+            "Please install Git and make sure it is in your PATH."
+        )
 
 
 def message(date):
